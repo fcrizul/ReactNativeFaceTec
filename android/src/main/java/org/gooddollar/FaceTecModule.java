@@ -57,7 +57,7 @@ public class FaceTecModule extends ReactContextBaseJavaModule implements Permiss
         this.reactContext = reactContext;
         reactContext.addActivityEventListener(activityListener);
 
-        mRequests = new SparseArray<Request>();
+         mRequests = new SparseArray<Request>();
     }
 
     @Override
@@ -83,29 +83,42 @@ public class FaceTecModule extends ReactContextBaseJavaModule implements Permiss
         final Object[][] sdkStatuses = {
             // common statuses (status names are aligned with the web sdk)
             {"NeverInitialized",  FaceTecSDKStatus.NEVER_INITIALIZED},
-            {"Initialized",  FaceTecSDKStatus.INITIALIZED}
-            // TODO:
-            // 1. check all the statuses names from the web SDK
-            // 2. find corresponding statuses from FaceTecSDKStatus (they could have a bit different names)
-            // 3. list all them here
+            {"Initialized",  FaceTecSDKStatus.INITIALIZED},
+            {"NetworkIssues", FaceTecSDKStatus.NETWORK_ISSUES},
+            {"InvalidDeviceKeyIdentifier",  FaceTecSDKStatus.INVALID_DEVICE_KEY_IDENTIFIER},
+            {"VersionDeprecated",  FaceTecSDKStatus.VERSION_DEPRECATED},
+            {"DeviceNotSupported",  FaceTecSDKStatus.DEVICE_NOT_SUPPORTED},
+            {"DeviceInLandscapeMode",  FaceTecSDKStatus.DEVICE_IN_LANDSCAPE_MODE},
+            {"DeviceInReversePortraitMode", FaceTecSDKStatus.DEVICE_IN_REVERSE_PORTRAIT_MODE},
+            {"DeviceLockedOut",  FaceTecSDKStatus.DEVICE_LOCKED_OUT},
+            {"KeyExpiredOrInvalid",  FaceTecSDKStatus.KEY_EXPIRED_OR_INVALID},
             // native-specific statuses
-            // 4. list statuses aren't matched with the native ones here, transforming their names to the PascalCase
-            // 5.you could use FaceTec.swift (where i did that for IOS SDK v8) as an example. but don't use it as is
-            // because statuses are changed a bit from v8 to v9
+            {"GracePeriodExceeded", FaceTecSDKStatus.GRACE_PERIOD_EXCEEDED},
+            {"EncryptionKeyInvalid", FaceTecSDKStatus.ENCRYPTION_KEY_INVALID},
         };
 
         // Session statuses
         final Object[][] sessionStatuses = {
-            // 6. the same for session statuses
             // common statuses (status names are aligned with the web sdk)
-            {"SessionCompletedSuccessfully",  FaceTecSessionStatus.SESSION_COMPLETED_SUCCESSFULLY}
+            {"UserCancelled",  FaceTecSessionStatus.USER_CANCELLED},
+            {"SessionCompletedSuccessfully",  FaceTecSessionStatus.SESSION_COMPLETED_SUCCESSFULLY},
+            {"Timeout",  FaceTecSessionStatus.TIMEOUT},
+            {"UnknownInternalError",  FaceTecSessionStatus.UNKNOWN_INTERNAL_ERROR},
+            {"ContextSwitch",  FaceTecSessionStatus.CONTEXT_SWITCH},
+            {"LockedOut",  FaceTecSessionStatus.LOCKED_OUT},
+            {"LandscapeModeNotAllowed",  FaceTecSessionStatus.LANDSCAPE_MODE_NOT_ALLOWED},
+            {"MissingGuidanceImages",  FaceTecSessionStatus.MISSING_GUIDANCE_IMAGES},
+            {"UserCancelledViaClickableReadyScreenSubtext",  FaceTecSessionStatus.USER_CANCELLED_VIA_CLICKABLE_READY_SCREEN_SUBTEXT},
+            {"NonProductionModeDeviceKeyIdentifierInvalid",  FaceTecSessionStatus.NON_PRODUCTION_MODE_KEY_INVALID},
+            {"CameraNotEnabled",  FaceTecSessionStatus.CAMERA_INITIALIZATION_ISSUE},
             // native-specific statuses
-            // 7. finally, update kindOfTheIssue.js in that PR https://github.com/GoodDollar/GoodDAPP/pull/2785
-            // by removing some old statuses and adding new ones. i did that for web only statuses
-            // byt there're also some native statuses we should also process some specific way
-            // (e.g. no camera access, wrong orientation, license issue, cancelled etc)
-            // for example in v8 we had deviceInReversePortraitMode native-only status
-            // which i've included to kindOfTheIssue to process it as the wrong orientation too
+            {"CameraPermissionDenied",  FaceTecSessionStatus.CAMERA_PERMISSION_DENIED},
+            {"NonProductionModeNetworkRequired",  FaceTecSessionStatus.NON_PRODUCTION_MODE_NETWORK_REQUIRED},
+            {"GracePeriodExceeded",  FaceTecSessionStatus.GRACE_PERIOD_EXCEEDED},
+            {"UserCancelledViaHardwareButton",  FaceTecSessionStatus.USER_CANCELLED_VIA_HARDWARE_BUTTON},
+            {"SessionUnsuccessful",  FaceTecSessionStatus.SESSION_UNSUCCESSFUL},
+            {"EncryptionKeyInvalid",  FaceTecSessionStatus.ENCRYPTION_KEY_INVALID},
+            {"ReversePortraitNotAllowed",  FaceTecSessionStatus.REVERSE_PORTRAIT_NOT_ALLOWED},
         };
 
         // put statuses to the maps
@@ -130,31 +143,64 @@ public class FaceTecModule extends ReactContextBaseJavaModule implements Permiss
         return constants;
     }
 
+    
+
     @ReactMethod
     public void initializeSDK(String serverURL, String jwtAccessToken,
-        String licenseKey, String encryptionKey, String licenseText,
-        Promise promise
+          String licenseKey, String encryptionKey, String licenseText,
+          final Promise promise
     ) {
-        Activity activity = getCurrentActivity();
+        final Activity activity = getCurrentActivity();
+        FaceTecSDKStatus status = getSDKStatus(activity);
 
-        //TODO: see Facetec.swift initializeSDK func or initialize method of FaceTecSDK.web on GoodDapp
-        // pass activity as "context" param to the all FaceTect SDK calls
+        switch (status) {
+            case INITIALIZED:
+            case DEVICE_IN_LANDSCAPE_MODE:
+            case DEVICE_IN_REVERSE_PORTRAIT_MODE:
+                FaceTecSDK.setDynamicStrings(Customization.UITextStrings);
+                promise.resolve(true);
 
-        // 1. get current status. if already initialized - resolve promise with true
-        // 2. if licenseText is set call initializeInProductionMode, initializeInDevelopmentMode otherwise
-        // 3. in FaceTecSDK.InitializeCallback check 'initialized' argument
-        // 4. if initialized:
-        //   a) call
-        //   FaceVerification.register(serverURL, jwtAccessToken);
-        //   FaceTecSDK.setDynamicStrings(Customization.UITextStrings);
-        //   b) resolve with true
-        // 5. if not initialized - get status, error code - status.ordinal() an error message - status.toString()
-        // 6. if status is still never intitialized - it means you tring to initialize on emulator.
-        // set corresponding error message (like in swift implementation)
-        // 7. reject promise with (status, error mesage), use promise util
-        // RCTPromise.rejectWith(promise, status, errorMessage);
+                break;
+            case NEVER_INITIALIZED:
+            case NETWORK_ISSUES:
+                FaceVerification.register(serverURL, jwtAccessToken);
 
-        promise.resolve(FaceTecSDK.version());
+                if (!licenseText.isEmpty()) {
+                    FaceTecSDK.initializeInProductionMode(activity, licenseText, licenseKey, encryptionKey, onInitializationAttempt(activity, promise));
+                    return;
+                }
+
+                FaceTecSDK.initializeInDevelopmentMode(activity, licenseKey, encryptionKey, onInitializationAttempt(activity, promise));
+
+                break;
+            default:
+                RCTPromise.rejectWith(promise, status);
+        }
+    }
+
+    private FaceTecSDKStatus getSDKStatus(Activity activity) {
+        return FaceTecSDK.getStatus(activity);
+    }
+
+    private FaceTecSDK.InitializeCallback onInitializationAttempt(final Activity activity, final Promise promise) {
+        return new FaceTecSDK.InitializeCallback() {
+            @Override
+            public void onCompletion(final boolean successful) {
+                if(successful) {
+                    FaceTecSDK.setDynamicStrings(Customization.UITextStrings);
+                    promise.resolve(true);
+                    return;
+                }
+
+                FaceTecSDKStatus sdkStatus = getSDKStatus(activity);
+                String customMessage = null;
+                if (sdkStatus == FaceTecSDKStatus.NEVER_INITIALIZED) {
+                    customMessage = "Initialize wasn't attempted as Simulator has been detected. FaceTec SDK could be ran on the real devices only";
+                }
+
+                RCTPromise.rejectWith(promise, sdkStatus, customMessage);
+            }
+        };
     }
 
     @ReactMethod

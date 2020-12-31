@@ -11,6 +11,8 @@ import com.facetec.sdk.FaceTecSessionStatus;
 import com.facetec.sdk.FaceTecSessionResult;
 
 import org.gooddollar.api.FaceVerification;
+import org.gooddollar.api.FaceVerification.APIException;
+import org.gooddollar.api.FaceVerification.SessionTokenCallback;
 import org.gooddollar.processors.ProcessingSubscriber;
 import org.gooddollar.util.EventEmitter;
 import org.gooddollar.util.Customization;
@@ -63,8 +65,23 @@ public class EnrollmentProcessor implements FaceTecFaceScanProcessor {
     // 1. request camera permissions. if fails - call subscriber.onCameraAccessError()
     // 2. store enrollmentIdentifier and maxRetries in the corresponding instance vars
     // 3. call start session
-    EventEmitter.dispatch(EventEmitter.UXEvent.UI_READY);
-    subscriber.onProcessingComplete(true, null, Customization.resultSuccessMessage);
+
+    FaceVerification.getSessionToken(new SessionTokenCallback() {
+      @Override
+      public void onSessionTokenReceived(String sessionToken) {
+        FaceTecSessionActivity.createAndLaunchSession(context, EnrollmentProcessor.this, sessionToken);
+        
+        EventEmitter.dispatch(EventEmitter.UXEvent.UI_READY);
+        subscriber.onProcessingComplete(true, null, Customization.resultSuccessMessage);
+      }
+      @Override
+      public void onFailure(APIException exception){
+        exception.printStackTrace();
+        subscriber.onCameraAccessError();
+      }
+    });
+
+    
   }
 
   public void processSessionWhileFaceTecSDKWaits(final FaceTecSessionResult sessionResult, final FaceTecFaceScanResultCallback faceScanResultCallback) {
